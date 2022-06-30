@@ -1,8 +1,26 @@
 #include "kms.h"
 
+#include <wayland-server.h>
 #include <xf86drm.h>
 #include <xf86drmMode.h>
 #include <zen-util.h>
+
+#include "kms-crtc.h"
+
+/* zn_drm_backend owns zn_kms */
+struct zn_kms {
+  int drm_fd;  // managed by zn_drm_backend
+
+  struct wl_list crtc_list;
+  struct wl_list plane_list;
+
+  struct {
+    int32_t cursor_width;
+    int32_t cursor_height;
+    bool timestamp_monotonic;
+    bool atomic_modeset;
+  } caps;
+};
 
 static int
 zn_kms_init_caps(struct zn_kms *self)
@@ -51,10 +69,49 @@ zn_kms_init_caps(struct zn_kms *self)
   return 0;
 }
 
+static int
+zn_kms_init_crtc_list(struct zn_kms *self, drmModeRes *resources)
+{
+  struct zn_kms_crtc *crtc, *crtc_tmp;
+  int i;
+
+  wl_list_init(&self->crtc_list);
+
+  for (i = 0; i < resources->count_crtcs; i++) {
+    crtc = zn_kms_crtc_create();
+    if (crtc == NULL) goto err;
+    wl_list_insert(self->crtc_list.prev, &crtc->link);
+  }
+
+  return 0;
+
+err:
+  wl_list_for_each_safe(crtc, crtc_tmp, &self->crtc_list, link)
+  {
+    wl_list_remove(&crtc->link);
+    zn_kms_crtc_destroy(crtc);
+  }
+
+  return -1;
+}
+
+static void
+zn_kms_deinit_crtc_list(struct zn_kms *self)
+{
+  struct zn_kms_crtc *crtc, *crtc_tmp;
+
+  wl_list_for_each_safe(crtc, crtc_tmp, &self->crtc_list, link)
+  {
+    wl_list_remove(&crtc->link);
+    zn_kms_crtc_destroy(crtc);
+  }
+}
+
 struct zn_kms *
 zn_kms_create(int drm_fd)
 {
   struct zn_kms *self;
+  drmModeRes *resources;
 
   self = zalloc(sizeof *self);
   if (self == NULL) goto err;
@@ -63,7 +120,17 @@ zn_kms_create(int drm_fd)
 
   if (zn_kms_init_caps(self) != 0) goto err_free;
 
+  resources = drmModeGetResources(self->drm_fd);
+  if (resources == NULL) goto err_free;
+
+  if (zn_kms_init_crtc_list(self, resources) != 0) goto err_resource;
+
+  drmModeFreeResources(resources);
+
   return self;
+
+err_resource:
+  drmModeFreeResources(resources);
 
 err_free:
   free(self);
@@ -75,5 +142,6 @@ err:
 void
 zn_kms_destroy(struct zn_kms *self)
 {
+  zn_kms_deinit_crtc_list(self);
   free(self);
 }

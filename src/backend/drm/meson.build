@@ -1,11 +1,13 @@
 zen_drm_backend_srcs = [
   'backend.c',
   'kms.c',
+  'kms-crtc.c',
 ]
 
 zen_drm_backend_deps = [
   libdrm_dep,
   udev_dep,
+  wayland_server_dep,
   zen_backend_libinput_dep,
   zen_session_dep,
   zen_util_dep,
