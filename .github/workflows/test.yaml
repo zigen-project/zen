@@ -19,7 +19,7 @@ jobs:
           sudo apt-get update &&
           sudo apt-get install \
             libwayland-dev libsystemd-dev libdbus-1-dev libudev-dev \
-            libinput-dev
+            libinput-dev libdrm-dev
 
       - uses: actions/setup-python@v1
         with:

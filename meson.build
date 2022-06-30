@@ -24,6 +24,7 @@ add_project_arguments(global_args, language: 'c')
 # generic version requirements
 
 dbus_req = '>= 1.12'
+libdrm_req = '>= 2.4.95'
 libinput_req = '>= 1.7'
 systemd_req = '>= 209'
 udev_req = '>= 228'
@@ -32,6 +33,7 @@ wayland_server_req = '>= 1.18.0'
 # dependencies
 
 dbus_dep = dependency('dbus-1', version: dbus_req)
+libdrm_dep = dependency('libdrm', version: libdrm_req)
 libinput_dep = dependency('libinput', version: libinput_req)
 systemd_dep = dependency('libsystemd', version: systemd_req)
 udev_dep = dependency('libudev', version: udev_req)
