@@ -9,11 +9,14 @@
 #include <zen-session.h>
 #include <zen-util.h>
 
+#include "kms.h"
+
 struct zn_drm_backend {
   struct zn_backend base;
 
   struct zn_session *session;
   struct udev *udev;
+  struct zn_kms *kms;
   struct zn_libinput *input;
 
   struct {
@@ -179,15 +182,26 @@ zn_backend_create(struct wl_display *display)
     goto err_udev;
   }
 
+  zn_log("using %s\n", self->drm.filename);
+
+  self->kms = zn_kms_create(self->drm.fd);
+  if (self->kms == NULL) {
+    zn_log("drm backend: failed to initialize kms\n");
+    goto err_drm_device;
+  }
+
   self->input = zn_libinput_create(self->udev, self->session, display, seat_id);
   if (self->input == NULL) {
     zn_log("drm backend: failed to create input devices\n");
-    goto err_drm_device;
+    goto err_kms;
   }
 
   udev_device_unref(drm_device);
 
   return &self->base;
+
+err_kms:
+  zn_kms_destroy(self->kms);
 
 err_drm_device:
   udev_device_unref(drm_device);
