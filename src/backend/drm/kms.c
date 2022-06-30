@@ -78,7 +78,7 @@ zn_kms_init_crtc_list(struct zn_kms *self, drmModeRes *resources)
   wl_list_init(&self->crtc_list);
 
   for (i = 0; i < resources->count_crtcs; i++) {
-    crtc = zn_kms_crtc_create();
+    crtc = zn_kms_crtc_create(self->drm_fd, resources->crtcs[i], i);
     if (crtc == NULL) goto err;
     wl_list_insert(self->crtc_list.prev, &crtc->link);
   }

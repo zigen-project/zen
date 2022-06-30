@@ -1,5 +1,6 @@
 zen_drm_backend_srcs = [
   'backend.c',
+  'drm-props.c',
   'kms.c',
   'kms-crtc.c',
 ]
