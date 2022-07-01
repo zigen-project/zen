@@ -1,11 +1,14 @@
 #include "kms.h"
 
+#include <errno.h>
+#include <string.h>
 #include <wayland-server.h>
 #include <xf86drm.h>
 #include <xf86drmMode.h>
 #include <zen-util.h>
 
 #include "kms-crtc.h"
+#include "kms-plane.h"
 
 /* zn_drm_backend owns zn_kms */
 struct zn_kms {
@@ -73,11 +76,10 @@ static int
 zn_kms_init_crtc_list(struct zn_kms *self, drmModeRes *resources)
 {
   struct zn_kms_crtc *crtc, *crtc_tmp;
-  int i;
 
   wl_list_init(&self->crtc_list);
 
-  for (i = 0; i < resources->count_crtcs; i++) {
+  for (int i = 0; i < resources->count_crtcs; i++) {
     crtc = zn_kms_crtc_create(self->drm_fd, resources->crtcs[i], i);
     if (crtc == NULL) goto err;
     wl_list_insert(self->crtc_list.prev, &crtc->link);
@@ -107,6 +109,56 @@ zn_kms_deinit_crtc_list(struct zn_kms *self)
   }
 }
 
+static int
+zn_kms_init_plane_list(struct zn_kms *self)
+{
+  struct zn_kms_plane *plane, *plane_tmp;
+  drmModePlaneRes *drm_plane_resources;
+  drmModePlane *drm_plane;
+
+  drm_plane_resources = drmModeGetPlaneResources(self->drm_fd);
+  if (!drm_plane_resources) {
+    zn_log("DRM: failed to get plane resources; %s\n", strerror(errno));
+    return -1;
+  }
+
+  for (uint32_t i = 0; i < drm_plane_resources->count_planes; i++) {
+    drm_plane = drmModeGetPlane(self->drm_fd, drm_plane_resources->planes[i]);
+    if (drm_plane == NULL) goto err;
+
+    plane = zn_kms_plane_create(drm_plane, i);
+    drmModeFreePlane(drm_plane);
+    if (plane == NULL) goto err;
+
+    wl_list_insert(&self->plane_list, &plane->link);
+  }
+
+  drmModeFreePlaneResources(drm_plane_resources);
+
+  return 0;
+
+err:
+  wl_list_for_each_safe(plane, plane_tmp, &self->plane_list, link)
+  {
+    wl_list_remove(&plane->link);
+    zn_kms_plane_destroy(plane);
+  }
+
+  return -1;
+}
+
+static void
+zn_kms_deinit_plane_list(struct zn_kms *self)
+{
+  struct zn_kms_plane *plane, *plane_tmp;
+
+  wl_list_for_each_safe(plane, plane_tmp, &self->plane_list, link)
+  {
+    wl_list_remove(&plane->link);
+    zn_kms_plane_destroy(plane);
+  }
+}
+
 struct zn_kms *
 zn_kms_create(int drm_fd)
 {
@@ -125,9 +177,14 @@ zn_kms_create(int drm_fd)
 
   if (zn_kms_init_crtc_list(self, resources) != 0) goto err_resource;
 
+  if (zn_kms_init_plane_list(self) != 0) goto err_crtc_list;
+
   drmModeFreeResources(resources);
 
   return self;
+
+err_crtc_list:
+  zn_kms_deinit_crtc_list(self);
 
 err_resource:
   drmModeFreeResources(resources);
@@ -142,6 +199,7 @@ err:
 void
 zn_kms_destroy(struct zn_kms *self)
 {
+  zn_kms_deinit_plane_list(self);
   zn_kms_deinit_crtc_list(self);
   free(self);
 }
