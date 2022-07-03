@@ -8,14 +8,16 @@
 #include <zen-util.h>
 
 #include "kms-crtc.h"
+#include "kms-head.h"
 #include "kms-plane.h"
 
 /* zn_drm_backend owns zn_kms */
 struct zn_kms {
   int drm_fd;  // managed by zn_drm_backend
 
-  struct wl_list crtc_list;
-  struct wl_list plane_list;
+  struct wl_list crtc_list;   // list of zn_kms_crtc
+  struct wl_list plane_list;  // list of zn_kms_plane
+  struct wl_list head_list;   // list of zn_kms_head
 
   struct {
     int32_t cursor_width;
@@ -23,6 +25,9 @@ struct zn_kms {
     bool timestamp_monotonic;
     bool atomic_modeset;
   } caps;
+
+  uint32_t fb_min_width, fb_max_width;
+  uint32_t fb_min_height, fb_max_height;
 };
 
 static int
@@ -116,6 +121,8 @@ zn_kms_init_plane_list(struct zn_kms *self)
   drmModePlaneRes *drm_plane_resources;
   drmModePlane *drm_plane;
 
+  wl_list_init(&self->plane_list);
+
   drm_plane_resources = drmModeGetPlaneResources(self->drm_fd);
   if (!drm_plane_resources) {
     zn_log("DRM: failed to get plane resources; %s\n", strerror(errno));
@@ -159,6 +166,53 @@ zn_kms_deinit_plane_list(struct zn_kms *self)
   }
 }
 
+static int
+zn_kms_init_head_list(struct zn_kms *self, drmModeRes *resources)
+{
+  drmModeConnector *connector;
+  struct zn_kms_head *head, *head_tmp;
+
+  wl_list_init(&self->head_list);
+
+  for (int i = 0; i < resources->count_connectors; i++) {
+    connector = drmModeGetConnector(self->drm_fd, resources->connectors[i]);
+    if (connector == NULL) goto err;
+
+    if (connector->connector_type == DRM_MODE_CONNECTOR_WRITEBACK) {
+      drmModeFreeConnector(connector);
+      continue;
+    }
+
+    head = zn_kms_head_create(connector);
+    drmModeFreeConnector(connector);
+    if (head == NULL) goto err;
+
+    wl_list_insert(&self->head_list, &head->link);
+  }
+
+  return 0;
+
+err:
+  wl_list_for_each_safe(head, head_tmp, &self->head_list, link)
+  {
+    wl_list_remove(&head->link);
+    zn_kms_head_destroy(head);
+  }
+  return -1;
+}
+
+static void
+zn_kms_deinit_head_list(struct zn_kms *self)
+{
+  struct zn_kms_head *head, *head_tmp;
+
+  wl_list_for_each_safe(head, head_tmp, &self->head_list, link)
+  {
+    wl_list_remove(&head->link);
+    zn_kms_head_destroy(head);
+  }
+}
+
 struct zn_kms *
 zn_kms_create(int drm_fd)
 {
@@ -175,13 +229,23 @@ zn_kms_create(int drm_fd)
   resources = drmModeGetResources(self->drm_fd);
   if (resources == NULL) goto err_free;
 
+  self->fb_min_width = resources->min_width;
+  self->fb_max_width = resources->max_width;
+  self->fb_min_height = resources->min_height;
+  self->fb_max_height = resources->max_height;
+
   if (zn_kms_init_crtc_list(self, resources) != 0) goto err_resource;
 
   if (zn_kms_init_plane_list(self) != 0) goto err_crtc_list;
 
+  if (zn_kms_init_head_list(self, resources) != 0) goto err_plane_list;
+
   drmModeFreeResources(resources);
 
   return self;
+
+err_plane_list:
+  zn_kms_deinit_plane_list(self);
 
 err_crtc_list:
   zn_kms_deinit_crtc_list(self);
@@ -199,6 +263,7 @@ err:
 void
 zn_kms_destroy(struct zn_kms *self)
 {
+  zn_kms_deinit_head_list(self);
   zn_kms_deinit_plane_list(self);
   zn_kms_deinit_crtc_list(self);
   free(self);

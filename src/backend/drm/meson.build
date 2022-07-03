@@ -3,6 +3,7 @@ zen_drm_backend_srcs = [
   'drm-props.c',
   'kms.c',
   'kms-crtc.c',
+  'kms-head.c',
   'kms-plane.c',
 ]
 
