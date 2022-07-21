@@ -4,18 +4,18 @@
 #include <wayland-server-core.h>
 
 #include "zen/output.h"
-#include "zen/scene/scene.h"
+#include "zen/scene/screen-layout.h"
 
 struct zn_screen {
   struct zn_output *output;  // zn_output owns zn_screen, nonnull
 
   struct wl_list views;  // zn_view::link;
 
-  struct wl_list link;  // zn_scene::screens;
+  struct wl_list link;  // zn_screen_layout::screens;
 };
 
 struct zn_screen *zn_screen_create(
-    struct zn_scene *scene, struct zn_output *output);
+    struct zn_screen_layout *screen_layout, struct zn_output *output);
 
 void zn_screen_destroy(struct zn_screen *self);
 

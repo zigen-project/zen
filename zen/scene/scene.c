@@ -13,9 +13,16 @@ zn_scene_create()
     goto err;
   }
 
-  wl_list_init(&self->screens);
+  self->screen_layout = zn_screen_layout_create();
+  if (self->screen_layout == NULL) {
+    zn_error("Failed to create zn_screen_layout");
+    goto err_free;
+  }
 
   return self;
+
+err_free:
+  free(self);
 
 err:
   return NULL;
@@ -24,8 +31,7 @@ err:
 void
 zn_scene_destroy(struct zn_scene* self)
 {
-  // ensure safety when zn_scene_output is destroyed
-  wl_list_remove(&self->screens);
+  zn_screen_layout_destroy(self->screen_layout);
 
   free(self);
 }

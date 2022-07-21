@@ -3,8 +3,10 @@
 
 #include <wayland-server-core.h>
 
+#include "zen/scene/screen-layout.h"
+
 struct zn_scene {
-  struct wl_list screens;  // zn_screen::link
+  struct zn_screen_layout* screen_layout;
 };
 
 struct zn_scene* zn_scene_create();
