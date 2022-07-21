@@ -7,6 +7,7 @@
 #include "zen/scene/screen-layout.h"
 
 struct zn_screen {
+  int x, y;
   struct zn_output *output;  // zn_output owns zn_screen, nonnull
 
   struct wl_list views;  // zn_view::link;

@@ -89,6 +89,17 @@ zn_output_damage_frame_handler(struct wl_listener *listener, void *data)
       wlr_surface_send_frame_done(view->impl->get_wlr_surface(view), &now);
 }
 
+void
+zn_output_update_global(struct zn_output *self)
+{
+  if (wl_list_empty(&self->wlr_output->modes) ||
+      self->wlr_output->current_mode != NULL) {
+    wlr_output_create_global(self->wlr_output);
+  } else {
+    wlr_output_destroy_global(self->wlr_output);
+  }
+}
+
 struct zn_output *
 zn_output_create(struct wlr_output *wlr_output, struct zn_server *server)
 {
