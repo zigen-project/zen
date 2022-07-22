@@ -3,7 +3,8 @@
 #include "zen-common.h"
 
 struct zn_screen *
-zn_screen_create(struct zn_scene *scene, struct zn_output *output)
+zn_screen_create(
+    struct zn_screen_layout *screen_layout, struct zn_output *output)
 {
   struct zn_screen *self;
 
@@ -15,7 +16,7 @@ zn_screen_create(struct zn_scene *scene, struct zn_output *output)
 
   self->output = output;
   wl_list_init(&self->views);
-  wl_list_insert(&scene->screens, &self->link);
+  wl_list_insert(&screen_layout->screens, &self->link);
 
   return self;
 
