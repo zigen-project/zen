@@ -19,7 +19,6 @@ zn_screen_layout_add_auto(
 {
   wl_list_insert(&self->screens, &screen->link);
   zn_screen_layout_reconfigure(self);
-  zn_output_update_global(screen->output);
 }
 
 struct zn_screen_layout*
