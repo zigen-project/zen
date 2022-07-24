@@ -1,4 +1,5 @@
 _zen_desktop_srcs = [
+  'display-system.c',
   'input-device.c',
   'input-manager.c',
   'main.c',
@@ -12,11 +13,15 @@ _zen_desktop_srcs = [
   'scene/scene.c',
   'scene/screen.c',
   'scene/view.c',
+
+  protocols['xdg-shell']['private-code'],
+  protocols['xdg-shell']['server-header'],
+  protocols['zen-desktop']['private-code'],
+  protocols['zen-desktop']['server-header'],
 ]
 
 _zen_desktop_deps = [
   pixman_dep,
-  server_protocols,
   wayland_server_dep,
   wlroots_dep,
   zen_common_dep,

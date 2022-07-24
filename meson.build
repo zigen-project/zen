@@ -37,12 +37,18 @@ wayland_scanner_dep = dependency('wayland-scanner')
 wayland_protocols_dep = dependency('wayland-protocols', version: wayland_protocols_req)
 wlroots_dep = dependency('wlroots', version: wlroots_req)
 pixman_dep = dependency('pixman-1')
+if get_option('cui-client')
+  wayland_client_dep = dependency('wayland-client')
+endif
 
 zen_inc = include_directories('include')
 
 subdir('protocols')
 subdir('common')
 subdir('zen')
+if get_option('cui-client')
+  subdir('cui-client')
+endif
 
 find_program('weston-terminal', required: true) # used in zen.desktop
 

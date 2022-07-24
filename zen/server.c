@@ -9,9 +9,11 @@
 #include <wlr/types/wlr_output.h>
 #include <wlr/types/wlr_xdg_shell.h>
 #include <wlr/xwayland.h>
+#include <zen-desktop-protocol.h>
 
 #include "zen-common/log.h"
 #include "zen-common/util.h"
+#include "zen/display-system.h"
 #include "zen/input-manager.h"
 #include "zen/output.h"
 #include "zen/scene/scene.h"
@@ -24,13 +26,13 @@ struct zn_server {
   struct wlr_backend *backend;
   struct wlr_renderer *renderer;
   struct wlr_allocator *allocator;
+  struct wlr_xwayland *xwayland;
 
   // these objects will be automatically destroyed when wl_display is destroyed
   struct wlr_compositor *w_compositor;
   struct wlr_xdg_shell *xdg_shell;
 
-  struct wlr_xwayland *xwayland;
-
+  struct zn_display_system *display_system;
   struct zn_input_manager *input_manager;
 
   struct zn_scene *scene;
@@ -40,6 +42,7 @@ struct zn_server {
   struct wl_listener new_input_listener;
   struct wl_listener new_output_listener;
   struct wl_listener xdg_shell_new_surface_listener;
+  struct wl_listener display_system_switch_listener;
   struct wl_listener xwayland_new_surface_listener;
 
   int exit_code;
@@ -101,6 +104,19 @@ zn_server_xdg_shell_new_surface_handler(
   wlr_xdg_surface_ping(xdg_surface);
 
   (void)zn_xdg_toplevel_view_create(xdg_surface->toplevel, self);
+}
+
+static void
+zn_server_display_system_switch_handler(
+    struct wl_listener *listener, void *data)
+{
+  struct zn_server *self =
+      zn_container_of(listener, self, display_system_switch_listener);
+  struct zn_display_system_switch_event *event = data;
+
+  // TODO: implement here
+
+  zn_display_system_send_applied(self->display_system, event->type);
 }
 
 static void
@@ -226,10 +242,11 @@ zn_server_create(struct wl_display *display)
     goto err_allocator;
   }
 
-  self->xdg_shell_new_surface_listener.notify =
-      zn_server_xdg_shell_new_surface_handler;
-  wl_signal_add(&self->xdg_shell->events.new_surface,
-      &self->xdg_shell_new_surface_listener);
+  self->display_system = zn_display_system_create(self->display);
+  if (self->display_system == NULL) {
+    zn_error("Failed to create display system");
+    goto err_scene;
+  }
 
   for (int i = 1; i <= 32; i++) {
     sprintf(socket_name_candidate, "wayland-%d", i);
@@ -241,7 +258,7 @@ zn_server_create(struct wl_display *display)
 
   if (self->socket == NULL) {
     zn_error("Failed to open wayland socket");
-    goto err_scene;
+    goto err_display_system;
   }
 
   self->input_manager = zn_input_manager_create(self->display);
@@ -261,10 +278,23 @@ zn_server_create(struct wl_display *display)
   self->new_output_listener.notify = zn_server_new_output_handler;
   wl_signal_add(&self->backend->events.new_output, &self->new_output_listener);
 
+  self->xdg_shell_new_surface_listener.notify =
+      zn_server_xdg_shell_new_surface_handler;
+  wl_signal_add(&self->xdg_shell->events.new_surface,
+      &self->xdg_shell_new_surface_listener);
+
+  self->display_system_switch_listener.notify =
+      zn_server_display_system_switch_handler;
+  wl_signal_add(&self->display_system->switch_signal,
+      &self->display_system_switch_listener);
+
   return self;
 
 err_socket:
   free(self->socket);
+
+err_display_system:
+  zn_display_system_destroy(self->display_system);
 
 err_scene:
   zn_scene_destroy(self->scene);
@@ -290,6 +320,7 @@ zn_server_destroy(struct zn_server *self)
 {
   if (self->xwayland) wlr_xwayland_destroy(self->xwayland);
   zn_input_manager_destroy(self->input_manager);
+  zn_display_system_destroy(self->display_system);
   free(self->socket);
   zn_scene_destroy(self->scene);
   wlr_allocator_destroy(self->allocator);
